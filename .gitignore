@@ -1,18 +1,204 @@
-# Build and Release Folders
-bin-debug/
-bin-release/
-[Oo]bj/
-[Bb]in/
+from datetime import datetime, timedelta
+import sys
 
-# Other files and folders
-.settings/
+users = {
+    "admin": {"password": "admin123", "role": "Admin"},
+    "otoh": {"password": "otoh123", "role": "Staff"},
+}
 
-# Executables
-*.swf
-*.air
-*.ipa
-*.apk
+inventory = [
+    {
+        "id": 1,
+        "name": "Espresso Beans",
+        "unit": "kg",
+        "quantity": 10,
+        "min_level": 3,
+        "expiration": "2026-10-15",
+    },
+    {
+        "id": 2,
+        "name": "Dairy Cream",
+        "unit": "L",
+        "quantity": 2,
+        "min_level": 5,
+        "expiration": "2026-10-05",
+    },
+    {
+        "id": 3,
+        "name": "Caramel Syrup",
+        "unit": "L",
+        "quantity": 4,
+        "min_level": 2,
+        "expiration": "2026-12-01",
+    },
+    {
+        "id": 4,
+        "name": "Fresh Milk",
+        "unit": "L",
+        "quantity": 1,
+        "min_level": 5,
+        "expiration": "2026-10-12",
+    },
+]
 
-# Project files, i.e. `.project`, `.actionScriptProperties` and `.flexProperties`
-# should NOT be excluded as they contain compiler settings and other important
-# information for Eclipse / Flash Builder.
+# Hiwalay na table para sa mga incoming deliveries / batches para hindi matabunan ang mga petsa
+delivery_records = [
+    {
+        "delivery_id": 1,
+        "ingredient_id": 1,
+        "name": "Espresso Beans",
+        "quantity": 10,
+        "unit": "kg",
+        "expiration": "2026-10-15",
+    },
+    {
+        "delivery_id": 2,
+        "ingredient_id": 2,
+        "name": "Dairy Cream",
+        "quantity": 2,
+        "unit": "L",
+        "expiration": "2026-10-05",
+    },
+    {
+        "delivery_id": 3,
+        "ingredient_id": 3,
+        "name": "Caramel Syrup",
+        "quantity": 4,
+        "unit": "L",
+        "expiration": "2026-12-01",
+    },
+    {
+        "delivery_id": 4,
+        "ingredient_id": 4,
+        "name": "Fresh Milk",
+        "quantity": 1,
+        "unit": "L",
+        "expiration": "2026-10-12",
+    },
+]
+
+shift_handover_reports = []
+
+
+def format_qty(val):
+  if isinstance(val, (int, float)):
+    if float(val).is_integer():
+      return int(val)
+  return val
+
+
+def get_item_status(item):
+  today = datetime.now().date()
+  seven_days = today + timedelta(days=7)
+  try:
+    exp_date = datetime.strptime(item["expiration"], "%Y-%m-%d").date()
+  except ValueError:
+    return "Unknown"
+
+  if exp_date < today:
+    return "Expired"
+  elif today <= exp_date <= seven_days:
+    return "Expiring Soon"
+  elif item["quantity"] <= item["min_level"]:
+    return "Low Stock"
+  else:
+    return "Safe"
+
+
+def validate_positive_number(prompt):
+  while True:
+    val_str = input(prompt).strip()
+    if val_str.lower() == "back":
+      return None
+    try:
+      val = float(val_str)
+      if val <= 0:
+        print("Please enter a positive number greater than 0.")
+        continue
+      return format_qty(val)
+    except ValueError:
+      print("Invalid input! Please enter a valid number or type 'back'.")
+
+
+def validate_expiry_date(prompt):
+  while True:
+    exp_str = input(prompt).strip()
+    if exp_str.lower() == "back":
+      return None
+    try:
+      exp_date = datetime.strptime(exp_str, "%Y-%m-%d").date()
+      if exp_date < datetime.now().date():
+        print("Expiration date cannot be in the past!")
+        continue
+      return exp_str
+    except ValueError:
+      print("Invalid date format! Please use YYYY-MM-DD or type 'back'.")
+
+
+def view_inventory():
+  print("\n--- CURRENT INVENTORY ITEMS ---")
+  print(
+      f"{'ID':<4} | {'Ingredient Name':<20} | {'Qty':<8} | {'Unit':<6} |"
+      f" {'Min':<6} | {'Expiration':<12} | {'Status'}"
+  )
+  print("-" * 75)
+  for item in inventory:
+    qty_str = str(format_qty(item["quantity"]))
+    min_str = str(format_qty(item["min_level"]))
+    status = get_item_status(item)
+    print(
+        f"{item['id']:<4} | {item['name']:<20} | {qty_str:<8} |"
+        f" {item['unit']:<6} | {min_str:<6} | {item['expiration']:<12} |"
+        f" {status}"
+    )
+
+
+def view_delivery_records():
+  print("\n--- INCOMING DELIVERY / BATCH RECORDS (HIWALAY NA TABLE) ---")
+  if not delivery_records:
+    print("Wala pang naitalang delivery.")
+    return
+  print(
+      f"{'Del. ID':<8} | {'Ing. ID':<8} | {'Ingredient Name':<20} |"
+      f" {'Qty':<8} | {'Unit':<6} | {'Expiration Date'}"
+  )
+  print("-" * 75)
+  for r in delivery_records:
+    print(
+        f"{r['delivery_id']:<8} | {r['ingredient_id']:<8} |"
+        f" {r['name']:<20} | {format_qty(r['quantity']):<8} |"
+        f" {r['unit']:<6} | {r['expiration']}"
+    )
+
+
+def deduct_stock_staff():
+  print("\n--- DEDUCT STOCK USAGE (STAFF) ---")
+  view_inventory()
+  id_str = input(
+      "Enter Ingredient ID used (or type 'back' to return): "
+  ).strip()
+  if id_str.lower() == "back":
+    return
+  try:
+    item_id = int(id_str)
+  except ValueError:
+    print("Invalid input! Please enter a valid numeric ID.")
+    return
+
+  item = next((i for i in inventory if i["id"] == item_id), None)
+
+  if not item:
+    print("Ingredient ID not found.")
+    return
+
+  print(
+      f"Selected: {item['name']} | Current Stock:"
+      f" {format_qty(item['quantity'])} {item['unit']}"
+  )
+  amt = validate_positive_number(
+      f"Enter quantity used/consumed ({item['unit']}) or 'back': "
+  )
+  if amt is None:
+    return
+
+  if 
